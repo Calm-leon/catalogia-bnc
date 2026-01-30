@@ -1,0 +1,64 @@
+:root {
+  --bg: #f7f3ee;
+  --text: #1e1b18;
+  --accent: #c74f2a;
+  --card: #ffffff;
+  --border: #e2d7cb;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Georgia", "Times New Roman", serif;
+  color: var(--text);
+  background: radial-gradient(circle at top, #fff9f1, var(--bg));
+}
+
+.page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  padding: 3rem 6vw;
+}
+
+.header h1 {
+  font-size: clamp(2rem, 4vw, 3rem);
+  margin: 0;
+}
+
+.header p {
+  margin: 0.5rem 0 0;
+  color: #5f5348;
+}
+
+.main {
+  flex: 1;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-left: 6px solid var(--accent);
+  padding: 2rem;
+  max-width: 720px;
+  box-shadow: 0 10px 30px rgba(30, 27, 24, 0.08);
+}
+
+.footer {
+  font-size: 0.9rem;
+  color: #6b5f54;
+}
+
+@media (max-width: 720px) {
+  .page {
+    padding: 2rem 8vw;
+  }
+
+  .card {
+    padding: 1.5rem;
+  }
+}
