@@ -1,5 +1,5 @@
 import os
-from typing import Optional
+from typing import Any, Dict, Optional
 
 import asyncpg
 
@@ -32,3 +32,27 @@ async def check_db() -> bool:
     async with _pool.acquire() as connection:
         value = await connection.fetchval("SELECT 1")
         return value == 1
+
+
+async def insert_log(
+    level: str,
+    message: str,
+    job_id: Optional[int],
+    user_id: Optional[int],
+    metadata: Dict[str, Any],
+) -> int:
+    if _pool is None:
+        raise RuntimeError("Database pool is not initialized")
+    async with _pool.acquire() as connection:
+        return await connection.fetchval(
+            """
+            INSERT INTO logs (level, message, job_id, user_id, metadata)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING id
+            """,
+            level,
+            message,
+            job_id,
+            user_id,
+            metadata,
+        )

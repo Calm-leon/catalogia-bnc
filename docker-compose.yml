@@ -11,6 +11,7 @@ services:
       - "5432:5432"
     volumes:
       - db-data:/var/lib/postgresql/data
+      - ./db/migrations:/migrations:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U catalogia"]
       interval: 5s
