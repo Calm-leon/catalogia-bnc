@@ -1,0 +1,10 @@
+CREATE TABLE IF NOT EXISTS jobs (
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  status TEXT NOT NULL,
+  source_filename TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_jobs_user_id ON jobs(user_id);
