@@ -1,3 +1,4 @@
+import json
 import os
 from typing import Any, Dict, Optional
 
@@ -43,6 +44,7 @@ async def insert_log(
 ) -> int:
     if _pool is None:
         raise RuntimeError("Database pool is not initialized")
+    metadata_json = json.dumps(metadata)
     async with _pool.acquire() as connection:
         return await connection.fetchval(
             """
@@ -54,5 +56,5 @@ async def insert_log(
             message,
             job_id,
             user_id,
-            metadata,
+            metadata_json,
         )
