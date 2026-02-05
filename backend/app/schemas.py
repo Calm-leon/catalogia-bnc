@@ -14,3 +14,11 @@ class LogCreate(BaseModel):
 class LogResponse(BaseModel):
     id: int
     status: str = "created"
+
+
+class StorageUploadResponse(BaseModel):
+    id: int
+    relative_path: str
+    stored_name: str
+    size_bytes: int
+    content_type: Optional[str] = None

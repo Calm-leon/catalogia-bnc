@@ -35,26 +35,40 @@ async def check_db() -> bool:
         return value == 1
 
 
-async def insert_log(
-    level: str,
-    message: str,
+async def insert_file(
+    storage_type: str,
+    original_name: str,
+    stored_name: str,
+    relative_path: str,
+    content_type: Optional[str],
+    size_bytes: int,
     job_id: Optional[int],
     user_id: Optional[int],
-    metadata: Dict[str, Any],
 ) -> int:
     if _pool is None:
         raise RuntimeError("Database pool is not initialized")
-    metadata_json = json.dumps(metadata)
     async with _pool.acquire() as connection:
         return await connection.fetchval(
             """
-            INSERT INTO logs (level, message, job_id, user_id, metadata)
-            VALUES ($1, $2, $3, $4, $5)
+            INSERT INTO files (
+                storage_type,
+                original_name,
+                stored_name,
+                relative_path,
+                content_type,
+                size_bytes,
+                job_id,
+                user_id
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             RETURNING id
             """,
-            level,
-            message,
+            storage_type,
+            original_name,
+            stored_name,
+            relative_path,
+            content_type,
+            size_bytes,
             job_id,
             user_id,
-            metadata_json,
         )

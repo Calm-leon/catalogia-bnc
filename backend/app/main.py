@@ -1,8 +1,10 @@
-from fastapi import FastAPI, HTTPException
+from typing import Optional
+
+from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.responses import JSONResponse
 
-from app import db
-from app.schemas import LogCreate, LogResponse
+from app import db, storage
+from app.schemas import StorageUploadResponse
 
 app = FastAPI(title="CatalogIA")
 
@@ -26,16 +28,28 @@ async def health() -> JSONResponse:
     return JSONResponse(status_code=code, content=payload)
 
 
-@app.post("/internal/logs", response_model=LogResponse)
-async def create_log(payload: LogCreate) -> LogResponse:
-    try:
-        log_id = await db.insert_log(
-            level=payload.level,
-            message=payload.message,
-            job_id=payload.job_id,
-            user_id=payload.user_id,
-            metadata=payload.metadata,
-        )
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-    return LogResponse(id=log_id)
+@app.post("/internal/storage/upload", response_model=StorageUploadResponse)
+async def upload_storage_file(
+    file: UploadFile = File(...),
+    storage_type: str = Form(...),
+    job_id: Optional[int] = Form(None),
+    user_id: Optional[int] = Form(None),
+) -> StorageUploadResponse:
+    stored = await storage.save_upload_file(file, storage_type)
+    file_id = await db.insert_file(
+        storage_type=stored.storage_type,
+        original_name=stored.original_name,
+        stored_name=stored.stored_name,
+        relative_path=stored.relative_path,
+        content_type=stored.content_type,
+        size_bytes=stored.size_bytes,
+        job_id=job_id,
+        user_id=user_id,
+    )
+    return StorageUploadResponse(
+        id=file_id,
+        relative_path=stored.relative_path,
+        stored_name=stored.stored_name,
+        size_bytes=stored.size_bytes,
+        content_type=stored.content_type,
+    )
