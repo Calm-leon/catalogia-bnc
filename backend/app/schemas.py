@@ -22,3 +22,10 @@ class StorageUploadResponse(BaseModel):
     stored_name: str
     size_bytes: int
     content_type: Optional[str] = None
+
+
+class PipelineImageResponse(BaseModel):
+    image_file_id: int
+    xml_file_id: int
+    xml_relative_path: str
+    xml_content: str
