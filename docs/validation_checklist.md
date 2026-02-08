@@ -4,7 +4,7 @@
 - [ ] Verificar servicios activos
   - `docker compose ps`
 - [ ] Ejecutar tests existentes
-  - Backend: (pendiente de definir)
+  - Backend: `cd backend` y `pytest`
   - Frontend: (pendiente de definir)
 - [ ] Confirmar compatibilidad
   - No romper endpoints existentes
@@ -31,4 +31,5 @@
 - Corregir antes de avanzar.
 
 ## Notas
-- Reemplazar los tests pendientes cuando se definan suites de pruebas.
+- Tests backend basicos disponibles en `backend/tests`.
+- Reemplazar los tests pendientes cuando se definan suites completas.
