@@ -4,8 +4,10 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
 from app import db, storage
+from app.auth import require_role
 from app.pipeline.image import run_image_pipeline
 from app.schemas import LogCreate, LogResponse, PipelineImageResponse, StorageUploadResponse
+from app.security import Role
 
 app = FastAPI(title="CatalogIA")
 
@@ -29,7 +31,7 @@ async def health() -> JSONResponse:
     return JSONResponse(status_code=code, content=payload)
 
 
-@app.post("/internal/logs", response_model=LogResponse)
+@app.post("/internal/logs", response_model=LogResponse, dependencies=[require_role(Role.ADMIN, Role.CATALOGER)])
 async def create_log(payload: LogCreate) -> LogResponse:
     try:
         log_id = await db.insert_log(
@@ -44,7 +46,7 @@ async def create_log(payload: LogCreate) -> LogResponse:
     return LogResponse(id=log_id)
 
 
-@app.post("/internal/storage/upload", response_model=StorageUploadResponse)
+@app.post("/internal/storage/upload", response_model=StorageUploadResponse, dependencies=[require_role(Role.ADMIN, Role.CATALOGER)])
 async def upload_storage_file(
     file: UploadFile = File(...),
     storage_type: str = Form(...),
@@ -71,7 +73,7 @@ async def upload_storage_file(
     )
 
 
-@app.post("/internal/pipeline/image", response_model=PipelineImageResponse)
+@app.post("/internal/pipeline/image", response_model=PipelineImageResponse, dependencies=[require_role(Role.ADMIN, Role.CATALOGER)])
 async def pipeline_image(
     file: UploadFile = File(...),
     storage_type: str = Form("images"),
