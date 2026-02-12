@@ -11,6 +11,7 @@ def test_log_creation(monkeypatch):
         return 123
 
     monkeypatch.setattr("app.db.insert_log", _insert_log)
+    monkeypatch.setenv("CATALOGER_TOKEN", "test-cataloger-token")
 
     payload = {
         "level": "info",
@@ -20,7 +21,11 @@ def test_log_creation(monkeypatch):
         "metadata": {"source": "pytest"},
     }
 
-    response = client.post("/internal/logs", json=payload)
+    response = client.post(
+        "/internal/logs",
+        json=payload,
+        headers={"Authorization": "Bearer test-cataloger-token"},
+    )
     assert response.status_code == 200
     assert response.json()["id"] == 123
     assert response.json()["status"] == "created"
