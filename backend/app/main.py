@@ -3,11 +3,14 @@ from typing import Optional
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
-from app import db, storage
+from app import db, metrics, storage
 from app.auth import require_role
+from app.observability import configure_logging
 from app.pipeline.image import run_image_pipeline
 from app.schemas import LogCreate, LogResponse, PipelineImageResponse, StorageUploadResponse
 from app.security import Role
+
+configure_logging()
 
 app = FastAPI(title="CatalogIA")
 
@@ -82,6 +85,7 @@ async def pipeline_image(
     user_id: Optional[int] = Form(None),
 ) -> PipelineImageResponse:
     result = await run_image_pipeline(file, storage_type, creator=creator)
+    metrics.record_pipeline_run(result.xml_content)
     image_file_id = await db.insert_file(
         storage_type=result.image_file.storage_type,
         original_name=result.image_file.original_name,
@@ -108,3 +112,8 @@ async def pipeline_image(
         xml_relative_path=result.xml_file.relative_path,
         xml_content=result.xml_content,
     )
+
+
+@app.get("/internal/metrics", dependencies=[require_role(Role.ADMIN, Role.CATALOGER)])
+async def get_metrics() -> JSONResponse:
+    return JSONResponse(content=metrics.export_metrics())
