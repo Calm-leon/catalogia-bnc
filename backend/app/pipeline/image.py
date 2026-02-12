@@ -3,6 +3,8 @@ from typing import Optional
 
 from fastapi import UploadFile
 
+from app.ai.base import DublinCoreInput
+from app.ai.factory import get_ai_engine
 from app import storage
 from app.storage import StoredFile
 
@@ -14,31 +16,20 @@ class PipelineImageResult:
     xml_content: str
 
 
-def _mock_dublin_core_xml(
-    title: str,
-    creator: str,
-    date_value: str,
-    format_value: str,
-) -> str:
-    return (
-        "<dc:title>{}</dc:title>\n"
-        "<dc:creator>{}</dc:creator>\n"
-        "<dc:date>{}</dc:date>\n"
-        "<dc:format>{}</dc:format>\n"
-    ).format(title, creator, date_value, format_value)
-
-
 async def run_image_pipeline(
     upload: UploadFile,
     storage_type: str,
     creator: Optional[str] = None,
 ) -> PipelineImageResult:
     image_file = await storage.save_upload_file(upload, storage_type)
-    xml_content = _mock_dublin_core_xml(
-        title=image_file.original_name,
-        creator=creator or "Desconocido",
-        date_value="2026-02-05",
-        format_value=image_file.content_type or "application/octet-stream",
+    engine = get_ai_engine()
+    xml_content = engine.generate_dublin_core_xml(
+        DublinCoreInput(
+            title=image_file.original_name,
+            creator=creator or "Desconocido",
+            date_value="2026-02-05",
+            format_value=image_file.content_type or "application/octet-stream",
+        )
     )
     xml_bytes = xml_content.encode("utf-8")
     xml_file = storage.save_bytes(
