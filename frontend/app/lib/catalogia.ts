@@ -2,6 +2,8 @@ export const TOKEN_STORAGE_KEY = "catalogia_token";
 export const PIPELINE_RESULT_STORAGE_KEY = "catalogia_pipeline_result";
 
 export type PipelineImageResponse = {
+  job_id: number;
+  job_status: "queued" | "running" | "completed" | "failed";
   image_file_id: number;
   xml_file_id: number;
   xml_relative_path: string;
