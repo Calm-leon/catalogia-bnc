@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import UploadFile
@@ -22,12 +23,13 @@ async def run_image_pipeline(
     creator: Optional[str] = None,
 ) -> PipelineImageResult:
     image_file = await storage.save_upload_file(upload, storage_type)
+    current_date = datetime.now(timezone.utc).date().isoformat()
     engine = get_ai_engine()
     xml_content = engine.generate_dublin_core_xml(
         DublinCoreInput(
             title=image_file.original_name,
             creator=creator or "Desconocido",
-            date_value="2026-02-05",
+            date_value=current_date,
             format_value=image_file.content_type or "application/octet-stream",
         )
     )

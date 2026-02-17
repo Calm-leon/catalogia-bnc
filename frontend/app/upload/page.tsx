@@ -145,6 +145,10 @@ export default function UploadPage() {
       {result ? (
         <div className="resultBox">
           <p>
+            <code>job_id</code>: {result.job_id} | <code>job_status</code>:{" "}
+            {result.job_status}
+          </p>
+          <p>
             <code>image_file_id</code>: {result.image_file_id} |{" "}
             <code>xml_file_id</code>:{" "}
             {result.xml_file_id}

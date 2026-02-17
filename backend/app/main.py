@@ -1,3 +1,4 @@
+import logging
 import os
 from typing import Optional
 
@@ -9,10 +10,11 @@ from app import db, metrics, storage
 from app.auth import require_role
 from app.observability import configure_logging
 from app.pipeline.image import run_image_pipeline
-from app.schemas import LogCreate, LogResponse, PipelineImageResponse, StorageUploadResponse
+from app.schemas import JobStatus, LogCreate, LogResponse, PipelineImageResponse, StorageUploadResponse
 from app.security import Role
 
 configure_logging()
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="CatalogIA")
 
@@ -100,34 +102,113 @@ async def pipeline_image(
     job_id: Optional[int] = Form(None),
     user_id: Optional[int] = Form(None),
 ) -> PipelineImageResponse:
-    result = await run_image_pipeline(file, storage_type, creator=creator)
-    metrics.record_pipeline_run(result.xml_content)
-    image_file_id = await db.insert_file(
-        storage_type=result.image_file.storage_type,
-        original_name=result.image_file.original_name,
-        stored_name=result.image_file.stored_name,
-        relative_path=result.image_file.relative_path,
-        content_type=result.image_file.content_type,
-        size_bytes=result.image_file.size_bytes,
-        job_id=job_id,
-        user_id=user_id,
-    )
-    xml_file_id = await db.insert_file(
-        storage_type=result.xml_file.storage_type,
-        original_name=result.xml_file.original_name,
-        stored_name=result.xml_file.stored_name,
-        relative_path=result.xml_file.relative_path,
-        content_type=result.xml_file.content_type,
-        size_bytes=result.xml_file.size_bytes,
-        job_id=job_id,
-        user_id=user_id,
-    )
-    return PipelineImageResponse(
-        image_file_id=image_file_id,
-        xml_file_id=xml_file_id,
-        xml_relative_path=result.xml_file.relative_path,
-        xml_content=result.xml_content,
-    )
+    effective_job_id = job_id
+    if effective_job_id is None:
+        try:
+            effective_job_id = await db.insert_job(
+                status=JobStatus.QUEUED.value,
+                source_filename=file.filename,
+                user_id=user_id,
+            )
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    try:
+        job_exists = await db.update_job_status(effective_job_id, JobStatus.RUNNING.value)
+        if not job_exists:
+            raise HTTPException(status_code=404, detail=f"Job {effective_job_id} not found")
+
+        await db.insert_log(
+            level="info",
+            message="pipeline_image_started",
+            job_id=effective_job_id,
+            user_id=user_id,
+            metadata={
+                "stage": "pipeline_image",
+                "storage_type": storage_type,
+                "filename": file.filename,
+            },
+        )
+
+        result = await run_image_pipeline(file, storage_type, creator=creator)
+        metrics.record_pipeline_run(result.xml_content)
+        image_file_id = await db.insert_file(
+            storage_type=result.image_file.storage_type,
+            original_name=result.image_file.original_name,
+            stored_name=result.image_file.stored_name,
+            relative_path=result.image_file.relative_path,
+            content_type=result.image_file.content_type,
+            size_bytes=result.image_file.size_bytes,
+            job_id=effective_job_id,
+            user_id=user_id,
+        )
+        xml_file_id = await db.insert_file(
+            storage_type=result.xml_file.storage_type,
+            original_name=result.xml_file.original_name,
+            stored_name=result.xml_file.stored_name,
+            relative_path=result.xml_file.relative_path,
+            content_type=result.xml_file.content_type,
+            size_bytes=result.xml_file.size_bytes,
+            job_id=effective_job_id,
+            user_id=user_id,
+        )
+
+        await db.update_job_status(effective_job_id, JobStatus.COMPLETED.value)
+        await db.insert_log(
+            level="info",
+            message="pipeline_image_completed",
+            job_id=effective_job_id,
+            user_id=user_id,
+            metadata={
+                "stage": "pipeline_image",
+                "image_file_id": image_file_id,
+                "xml_file_id": xml_file_id,
+                "xml_relative_path": result.xml_file.relative_path,
+            },
+        )
+
+        return PipelineImageResponse(
+            job_id=effective_job_id,
+            job_status=JobStatus.COMPLETED,
+            image_file_id=image_file_id,
+            xml_file_id=xml_file_id,
+            xml_relative_path=result.xml_file.relative_path,
+            xml_content=result.xml_content,
+        )
+    except HTTPException:
+        raise
+    except RuntimeError as exc:
+        try:
+            await db.update_job_status(effective_job_id, JobStatus.FAILED.value)
+            await db.insert_log(
+                level="error",
+                message="pipeline_image_failed",
+                job_id=effective_job_id,
+                user_id=user_id,
+                metadata={
+                    "stage": "pipeline_image",
+                    "error": str(exc),
+                },
+            )
+        except RuntimeError:
+            logger.exception("Failed to write pipeline failure trace", extra={"job_id": effective_job_id})
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:
+        try:
+            await db.update_job_status(effective_job_id, JobStatus.FAILED.value)
+            await db.insert_log(
+                level="error",
+                message="pipeline_image_failed",
+                job_id=effective_job_id,
+                user_id=user_id,
+                metadata={
+                    "stage": "pipeline_image",
+                    "error": str(exc),
+                },
+            )
+        except RuntimeError:
+            logger.exception("Failed to write pipeline failure trace", extra={"job_id": effective_job_id})
+        raise HTTPException(status_code=500, detail="Pipeline execution failed") from exc
 
 
 @app.get("/internal/metrics", dependencies=[require_role(Role.ADMIN, Role.CATALOGER)])
