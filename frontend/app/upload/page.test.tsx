@@ -72,6 +72,8 @@ describe("UploadPage", () => {
       ok: true,
       status: 200,
       json: async () => ({
+        job_id: 7,
+        job_status: "completed",
         image_file_id: 1,
         xml_file_id: 2,
         xml_relative_path: "xml/2026/02/12/file.xml",
