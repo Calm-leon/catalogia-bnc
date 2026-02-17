@@ -97,3 +97,40 @@ async def insert_file(
             job_id,
             user_id,
         )
+
+
+async def insert_job(
+    status: str,
+    source_filename: Optional[str],
+    user_id: Optional[int],
+) -> int:
+    if _pool is None:
+        raise RuntimeError("Database pool is not initialized")
+    async with _pool.acquire() as connection:
+        return await connection.fetchval(
+            """
+            INSERT INTO jobs (status, source_filename, user_id)
+            VALUES ($1, $2, $3)
+            RETURNING id
+            """,
+            status,
+            source_filename,
+            user_id,
+        )
+
+
+async def update_job_status(job_id: int, status: str) -> bool:
+    if _pool is None:
+        raise RuntimeError("Database pool is not initialized")
+    async with _pool.acquire() as connection:
+        updated_id = await connection.fetchval(
+            """
+            UPDATE jobs
+            SET status = $2, updated_at = NOW()
+            WHERE id = $1
+            RETURNING id
+            """,
+            job_id,
+            status,
+        )
+        return updated_id is not None

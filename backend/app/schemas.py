@@ -1,6 +1,14 @@
+from enum import StrEnum
 from typing import Any, Dict, Optional
 
 from pydantic import BaseModel, Field
+
+
+class JobStatus(StrEnum):
+    QUEUED = "queued"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
 
 
 class LogCreate(BaseModel):
@@ -25,6 +33,8 @@ class StorageUploadResponse(BaseModel):
 
 
 class PipelineImageResponse(BaseModel):
+    job_id: int
+    job_status: JobStatus
     image_file_id: int
     xml_file_id: int
     xml_relative_path: str
