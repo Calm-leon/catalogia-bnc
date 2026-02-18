@@ -59,6 +59,9 @@ def test_xml_revision_saved_and_registered(monkeypatch):
     assert body["job_id"] == 42
     assert body["xml_relative_path"].endswith("_reviewed.xml")
     assert not body["xml_relative_path"].endswith("_reviewed_reviewed.xml")
+    assert body["xml_content"].startswith('<?xml version="1.0" encoding="utf-8"?>')
+    assert "<rdf:RDF" in body["xml_content"]
+    assert "<dc:description>Descripcion validada</dc:description>" in body["xml_content"]
 
 
 def test_xml_revision_normalizes_already_reviewed_path(monkeypatch):

@@ -13,6 +13,17 @@ def test_default_engine_is_mock(monkeypatch):
     monkeypatch.delenv("AI_ENGINE_PROVIDER", raising=False)
     engine = get_ai_engine()
     assert isinstance(engine, MockAIEngine)
+    xml = engine.generate_dublin_core_xml(
+        DublinCoreInput(
+            title="Titulo",
+            creator="Autor",
+            date_value="2026-02-18",
+            format_value="image/jpeg",
+        )
+    )
+    assert xml.startswith('<?xml version="1.0" encoding="utf-8"?>')
+    assert "<rdf:RDF" in xml
+    assert "<dc:title>Titulo</dc:title>" in xml
 
 
 def test_openai_provider_selected(monkeypatch):
