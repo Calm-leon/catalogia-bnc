@@ -7,11 +7,10 @@ import {
 } from "../lib/catalogia";
 
 const replaceMock = jest.fn();
+const routerMock = { replace: replaceMock };
 
 jest.mock("next/navigation", () => ({
-  useRouter: () => ({
-    replace: replaceMock,
-  }),
+  useRouter: () => routerMock,
 }));
 
 describe("XmlPage", () => {
