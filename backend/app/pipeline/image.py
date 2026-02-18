@@ -24,15 +24,18 @@ async def run_image_pipeline(
 ) -> PipelineImageResult:
     image_file = await storage.save_upload_file(upload, storage_type)
     current_date = datetime.now(timezone.utc).date().isoformat()
-    engine = get_ai_engine()
-    xml_content = engine.generate_dublin_core_xml(
-        DublinCoreInput(
-            title=image_file.original_name,
-            creator=creator or "Desconocido",
-            date_value=current_date,
-            format_value=image_file.content_type or "application/octet-stream",
+    try:
+        engine = get_ai_engine()
+        xml_content = engine.generate_dublin_core_xml(
+            DublinCoreInput(
+                title=image_file.original_name,
+                creator=creator or "Desconocido",
+                date_value=current_date,
+                format_value=image_file.content_type or "application/octet-stream",
+            )
         )
-    )
+    except RuntimeError as exc:
+        raise RuntimeError("AI provider generation failed") from exc
     xml_bytes = xml_content.encode("utf-8")
     xml_file = storage.save_bytes(
         storage_type="xml",
