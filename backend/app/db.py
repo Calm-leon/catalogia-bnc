@@ -134,3 +134,84 @@ async def update_job_status(job_id: int, status: str) -> bool:
             status,
         )
         return updated_id is not None
+
+
+async def job_exists(job_id: int) -> bool:
+    if _pool is None:
+        raise RuntimeError("Database pool is not initialized")
+    async with _pool.acquire() as connection:
+        found = await connection.fetchval("SELECT id FROM jobs WHERE id = $1", job_id)
+        return found is not None
+
+
+async def upsert_file_for_job(
+    storage_type: str,
+    original_name: str,
+    stored_name: str,
+    relative_path: str,
+    content_type: Optional[str],
+    size_bytes: int,
+    job_id: int,
+    user_id: Optional[int],
+) -> int:
+    if _pool is None:
+        raise RuntimeError("Database pool is not initialized")
+    async with _pool.acquire() as connection:
+        existing_id = await connection.fetchval(
+            """
+            SELECT id
+            FROM files
+            WHERE job_id = $1
+              AND storage_type = $2
+              AND stored_name = $3
+            LIMIT 1
+            """,
+            job_id,
+            storage_type,
+            stored_name,
+        )
+        if existing_id is None:
+            return await connection.fetchval(
+                """
+                INSERT INTO files (
+                    storage_type,
+                    original_name,
+                    stored_name,
+                    relative_path,
+                    content_type,
+                    size_bytes,
+                    job_id,
+                    user_id
+                )
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                RETURNING id
+                """,
+                storage_type,
+                original_name,
+                stored_name,
+                relative_path,
+                content_type,
+                size_bytes,
+                job_id,
+                user_id,
+            )
+        return await connection.fetchval(
+            """
+            UPDATE files
+            SET
+                original_name = $2,
+                relative_path = $3,
+                content_type = $4,
+                size_bytes = $5,
+                user_id = $6,
+                created_at = NOW()
+            WHERE id = $1
+            RETURNING id
+            """,
+            existing_id,
+            original_name,
+            relative_path,
+            content_type,
+            size_bytes,
+            user_id,
+        )

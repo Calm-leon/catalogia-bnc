@@ -1,6 +1,8 @@
 import logging
 import os
+from pathlib import Path
 from typing import Optional
+from xml.sax.saxutils import escape
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,7 +12,15 @@ from app import db, metrics, storage
 from app.auth import require_role
 from app.observability import configure_logging
 from app.pipeline.image import run_image_pipeline
-from app.schemas import JobStatus, LogCreate, LogResponse, PipelineImageResponse, StorageUploadResponse
+from app.schemas import (
+    JobStatus,
+    LogCreate,
+    LogResponse,
+    PipelineImageResponse,
+    StorageUploadResponse,
+    XmlRevisionRequest,
+    XmlRevisionResponse,
+)
 from app.security import Role
 
 configure_logging()
@@ -214,3 +224,78 @@ async def pipeline_image(
 @app.get("/internal/metrics", dependencies=[require_role(Role.ADMIN, Role.CATALOGER)])
 async def get_metrics() -> JSONResponse:
     return JSONResponse(content=metrics.export_metrics())
+
+
+def _reviewed_relative_path(xml_relative_path: str) -> str:
+    source = Path(xml_relative_path)
+    base = source.stem
+    while base.endswith("_reviewed"):
+        base = base[: -len("_reviewed")]
+    suffix = source.suffix or ".xml"
+    return str(source.with_name(f"{base}_reviewed{suffix}")).replace("\\", "/")
+
+
+def _build_reviewed_xml(payload: XmlRevisionRequest) -> str:
+    return (
+        "<dc:title>{}</dc:title>\n"
+        "<dc:creator>{}</dc:creator>\n"
+        "<dc:date>{}</dc:date>\n"
+        "<dc:format>{}</dc:format>\n"
+        "<dc:description>{}</dc:description>\n"
+    ).format(
+        escape(payload.title),
+        escape(payload.creator),
+        escape(payload.date),
+        escape(payload.format),
+        escape(payload.description),
+    )
+
+
+@app.post(
+    "/internal/pipeline/image/review",
+    response_model=XmlRevisionResponse,
+    dependencies=[require_role(Role.ADMIN, Role.CATALOGER)],
+)
+async def review_pipeline_image(payload: XmlRevisionRequest) -> XmlRevisionResponse:
+    try:
+        if not await db.job_exists(payload.job_id):
+            raise HTTPException(status_code=404, detail=f"Job {payload.job_id} not found")
+
+        reviewed_xml = _build_reviewed_xml(payload)
+        reviewed_relative_path = _reviewed_relative_path(payload.xml_relative_path)
+        reviewed_stored = storage.save_bytes_at_relative_path(
+            relative_path=reviewed_relative_path,
+            original_name=Path(reviewed_relative_path).name,
+            data=reviewed_xml.encode("utf-8"),
+            content_type="application/xml",
+        )
+        file_id = await db.upsert_file_for_job(
+            storage_type="xml",
+            original_name=reviewed_stored.original_name,
+            stored_name=reviewed_stored.stored_name,
+            relative_path=reviewed_stored.relative_path,
+            content_type=reviewed_stored.content_type,
+            size_bytes=reviewed_stored.size_bytes,
+            job_id=payload.job_id,
+            user_id=payload.user_id,
+        )
+        await db.insert_log(
+            level="info",
+            message="pipeline_image_review_saved",
+            job_id=payload.job_id,
+            user_id=payload.user_id,
+            metadata={
+                "stage": "xml_review",
+                "xml_relative_path": reviewed_stored.relative_path,
+            },
+        )
+        return XmlRevisionResponse(
+            file_id=file_id,
+            job_id=payload.job_id,
+            xml_relative_path=reviewed_stored.relative_path,
+            xml_content=reviewed_xml,
+        )
+    except HTTPException:
+        raise
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc

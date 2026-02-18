@@ -39,3 +39,22 @@ class PipelineImageResponse(BaseModel):
     xml_file_id: int
     xml_relative_path: str
     xml_content: str
+
+
+class XmlRevisionRequest(BaseModel):
+    job_id: int
+    user_id: Optional[int] = None
+    xml_relative_path: str = Field(..., min_length=1)
+    title: str = Field(..., min_length=1)
+    creator: str = Field(..., min_length=1)
+    date: str = Field(..., min_length=1)
+    format: str = Field(..., min_length=1)
+    description: str = Field(..., min_length=1)
+
+
+class XmlRevisionResponse(BaseModel):
+    file_id: int
+    job_id: int
+    xml_relative_path: str
+    xml_content: str
+    status: str = "saved"
