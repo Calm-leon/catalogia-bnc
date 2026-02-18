@@ -229,6 +229,8 @@ async def get_metrics() -> JSONResponse:
 def _reviewed_relative_path(xml_relative_path: str) -> str:
     source = Path(xml_relative_path)
     base = source.stem
+    while base.endswith("_reviewed"):
+        base = base[: -len("_reviewed")]
     suffix = source.suffix or ".xml"
     return str(source.with_name(f"{base}_reviewed{suffix}")).replace("\\", "/")
 
