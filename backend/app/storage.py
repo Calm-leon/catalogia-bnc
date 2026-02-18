@@ -74,3 +74,25 @@ def save_bytes(
         content_type=content_type,
         size_bytes=len(data),
     )
+
+
+def save_bytes_at_relative_path(
+    relative_path: str,
+    original_name: str,
+    data: bytes,
+    content_type: Optional[str],
+) -> StoredFile:
+    relative = Path(relative_path)
+    storage_type = _safe_segment(relative.parts[0] if relative.parts else "xml")
+    absolute = _storage_base() / relative
+    _ensure_parent(absolute)
+    absolute.write_bytes(data)
+
+    return StoredFile(
+        storage_type=storage_type,
+        original_name=original_name,
+        stored_name=absolute.name,
+        relative_path=_to_relative(relative),
+        content_type=content_type,
+        size_bytes=len(data),
+    )
