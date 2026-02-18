@@ -103,6 +103,61 @@ def test_openai_timeout_error_is_controlled(monkeypatch):
         )
 
 
+def test_openai_uses_image_payload(monkeypatch):
+    captured_json = {"value": None}
+
+    class _Response:
+        status_code = 200
+
+        def json(self):
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": (
+                                '<?xml version="1.0" encoding="utf-8"?>\n'
+                                "<rdf:RDF><rdf:Description><dc:title>x</dc:title></rdf:Description></rdf:RDF>"
+                            )
+                        }
+                    }
+                ]
+            }
+
+    class _Client:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def post(self, _url, headers=None, json=None):
+            captured_json["value"] = json
+            return _Response()
+
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr("app.ai.openai_engine.httpx.Client", _Client)
+
+    engine = OpenAIEngine()
+    xml = engine.generate_dublin_core_xml(
+        DublinCoreInput(
+            title="x",
+            creator="y",
+            date_value="2026-02-18",
+            format_value="image/jpeg",
+        ),
+        image_bytes=b"fake-image",
+        image_mime_type="image/jpeg",
+    )
+
+    assert "<rdf:RDF>" in xml
+    message_content = captured_json["value"]["messages"][1]["content"]
+    assert isinstance(message_content, list)
+    assert any(item.get("type") == "image_url" for item in message_content)
+
+
 def test_unknown_provider(monkeypatch):
     monkeypatch.setenv("AI_ENGINE_PROVIDER", "foo")
     with pytest.raises(RuntimeError, match="Unsupported"):

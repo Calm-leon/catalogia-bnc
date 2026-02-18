@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import os
+from pathlib import Path
 from typing import Optional
 
 from fastapi import UploadFile
@@ -23,6 +25,7 @@ async def run_image_pipeline(
     creator: Optional[str] = None,
 ) -> PipelineImageResult:
     image_file = await storage.save_upload_file(upload, storage_type)
+    image_bytes = _load_image_bytes(image_file.relative_path)
     current_date = datetime.now(timezone.utc).date().isoformat()
     try:
         engine = get_ai_engine()
@@ -32,7 +35,9 @@ async def run_image_pipeline(
                 creator=creator or "Desconocido",
                 date_value=current_date,
                 format_value=image_file.content_type or "application/octet-stream",
-            )
+            ),
+            image_bytes=image_bytes,
+            image_mime_type=image_file.content_type,
         )
     except RuntimeError as exc:
         raise RuntimeError("AI provider generation failed") from exc
@@ -48,3 +53,11 @@ async def run_image_pipeline(
         xml_file=xml_file,
         xml_content=xml_content,
     )
+
+
+def _load_image_bytes(relative_path: str) -> bytes | None:
+    storage_base = Path(os.getenv("STORAGE_PATH", "/data"))
+    absolute = storage_base / Path(relative_path)
+    if not absolute.exists():
+        return None
+    return absolute.read_bytes()

@@ -3,6 +3,7 @@
 ## Interfaz comun
 - Contrato: `app.ai.base.AIEngine`
 - Entrada: `DublinCoreInput`
+- Contexto opcional: `image_bytes`, `image_mime_type`
 - Salida: `generate_dublin_core_xml(...) -> str`
 
 ## Adaptadores disponibles
@@ -43,6 +44,11 @@ Seleccion por variable de entorno `AI_ENGINE_PROVIDER`.
 - Por defecto no hay fallback: si un proveedor real falla por configuracion/conectividad, el pipeline falla controlado.
 - `AI_ENGINE_FALLBACK_TO_MOCK=true` permite fallback **solo** en entorno local (`APP_ENV=development|dev|local`).
 - En `APP_ENV=production`, fallback a `mock` es rechazado.
+
+## Soporte visual (vision)
+- El pipeline de imagen envia bytes reales de la imagen al proveedor cuando estan disponibles.
+- OpenAI y Azure pueden usar contenido multimodal (`text + image_url data:`).
+- Si no hay imagen disponible, el proveedor opera con metadatos basicos.
 
 ## Prueba de intercambio
 - Default: sin `AI_ENGINE_PROVIDER` usa `mock`.

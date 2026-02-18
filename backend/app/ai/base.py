@@ -11,5 +11,10 @@ class DublinCoreInput:
 
 
 class AIEngine(Protocol):
-    def generate_dublin_core_xml(self, payload: DublinCoreInput) -> str:
+    def generate_dublin_core_xml(
+        self,
+        payload: DublinCoreInput,
+        image_bytes: bytes | None = None,
+        image_mime_type: str | None = None,
+    ) -> str:
         ...

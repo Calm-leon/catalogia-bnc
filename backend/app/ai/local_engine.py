@@ -1,4 +1,5 @@
 import os
+import base64
 
 import httpx
 
@@ -13,7 +14,12 @@ class LocalAIEngine:
         if not self.base_url:
             raise RuntimeError("Local provider is missing required configuration")
 
-    def generate_dublin_core_xml(self, payload: DublinCoreInput) -> str:
+    def generate_dublin_core_xml(
+        self,
+        payload: DublinCoreInput,
+        image_bytes: bytes | None = None,
+        image_mime_type: str | None = None,
+    ) -> str:
         request_payload = {
             "prompt": "Generate Dublin Core XML",
             "metadata": {
@@ -22,6 +28,12 @@ class LocalAIEngine:
                 "date": payload.date_value,
                 "format": payload.format_value,
                 "description": "Pendiente de revision",
+            },
+            "image": {
+                "content_type": image_mime_type or "image/jpeg",
+                "data_base64": base64.b64encode(image_bytes).decode("ascii")
+                if image_bytes
+                else None,
             },
         }
         last_error: Exception | None = None

@@ -1,4 +1,5 @@
 import os
+import base64
 from typing import Any, Dict, List
 
 import httpx
@@ -17,8 +18,13 @@ class AzureAIEngine:
         if not self.endpoint or not self.api_key or not self.deployment:
             raise RuntimeError("Azure provider is missing required configuration")
 
-    def generate_dublin_core_xml(self, payload: DublinCoreInput) -> str:
-        messages = self._messages(payload)
+    def generate_dublin_core_xml(
+        self,
+        payload: DublinCoreInput,
+        image_bytes: bytes | None = None,
+        image_mime_type: str | None = None,
+    ) -> str:
+        messages = self._messages(payload, image_bytes=image_bytes, image_mime_type=image_mime_type)
         url = (
             f"{self.endpoint}/openai/deployments/{self.deployment}/chat/completions"
             f"?api-version={self.api_version}"
@@ -57,23 +63,37 @@ class AzureAIEngine:
                 continue
         raise RuntimeError("Azure provider timed out or unreachable") from last_error
 
-    def _messages(self, payload: DublinCoreInput) -> List[Dict[str, Any]]:
+    def _messages(
+        self,
+        payload: DublinCoreInput,
+        image_bytes: bytes | None = None,
+        image_mime_type: str | None = None,
+    ) -> List[Dict[str, Any]]:
+        content_parts: List[Dict[str, Any]] = [
+            {
+                "type": "text",
+                "text": (
+                    "Genera XML Dublin Core en formato RDF para catalogacion archivistica. "
+                    "Devuelve solo XML valido."
+                ),
+            }
+        ]
+        if image_bytes:
+            mime = image_mime_type or "image/jpeg"
+            encoded = base64.b64encode(image_bytes).decode("ascii")
+            content_parts.append(
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:{mime};base64,{encoded}"},
+                }
+            )
         return [
             {
                 "role": "system",
-                "content": (
-                    "You generate only Dublin Core XML tags. "
-                    "Return plain XML with dc:title, dc:creator, dc:date, dc:format, dc:description."
-                ),
+                "content": "Eres catalogador experto y respondes solo XML Dublin Core RDF.",
             },
             {
                 "role": "user",
-                "content": (
-                    f"title={payload.title}\n"
-                    f"creator={payload.creator}\n"
-                    f"date={payload.date_value}\n"
-                    f"format={payload.format_value}\n"
-                    "description=Pendiente de revision\n"
-                ),
+                "content": content_parts,
             },
         ]
