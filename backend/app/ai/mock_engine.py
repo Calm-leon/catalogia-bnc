@@ -1,16 +1,18 @@
 from app.ai.base import DublinCoreInput
+from app.dublin_core_xml import build_dublin_core_rdf_xml
 
 
 class MockAIEngine:
-    def generate_dublin_core_xml(self, payload: DublinCoreInput) -> str:
-        return (
-            "<dc:title>{}</dc:title>\n"
-            "<dc:creator>{}</dc:creator>\n"
-            "<dc:date>{}</dc:date>\n"
-            "<dc:format>{}</dc:format>\n"
-        ).format(
-            payload.title,
-            payload.creator,
-            payload.date_value,
-            payload.format_value,
+    def generate_dublin_core_xml(
+        self,
+        payload: DublinCoreInput,
+        image_bytes: bytes | None = None,
+        image_mime_type: str | None = None,
+    ) -> str:
+        return build_dublin_core_rdf_xml(
+            title=payload.title,
+            creator=payload.creator,
+            date_value=payload.date_value,
+            format_values=payload.format_value,
+            description_values="Pendiente de revision",
         )

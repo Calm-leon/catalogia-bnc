@@ -2,7 +2,6 @@ import logging
 import os
 from pathlib import Path
 from typing import Optional
-from xml.sax.saxutils import escape
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,6 +9,7 @@ from fastapi.responses import JSONResponse
 
 from app import db, metrics, storage
 from app.auth import require_role
+from app.dublin_core_xml import build_dublin_core_rdf_xml
 from app.observability import configure_logging
 from app.pipeline.image import run_image_pipeline
 from app.schemas import (
@@ -236,18 +236,12 @@ def _reviewed_relative_path(xml_relative_path: str) -> str:
 
 
 def _build_reviewed_xml(payload: XmlRevisionRequest) -> str:
-    return (
-        "<dc:title>{}</dc:title>\n"
-        "<dc:creator>{}</dc:creator>\n"
-        "<dc:date>{}</dc:date>\n"
-        "<dc:format>{}</dc:format>\n"
-        "<dc:description>{}</dc:description>\n"
-    ).format(
-        escape(payload.title),
-        escape(payload.creator),
-        escape(payload.date),
-        escape(payload.format),
-        escape(payload.description),
+    return build_dublin_core_rdf_xml(
+        title=payload.title,
+        creator=payload.creator,
+        date_value=payload.date,
+        format_values=payload.format,
+        description_values=payload.description,
     )
 
 
