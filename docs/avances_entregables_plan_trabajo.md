@@ -4,15 +4,15 @@ Fecha de corte: 2026-02-18
 
 ## 1. Resumen ejecutivo
 El proyecto se ejecuta en dos etapas:
-- Fase 1 (base tecnica): `docs/_build/prompt-catalogia-achm`
-- Fase 2 (MVP usable para catalogador): `docs/_build/prompt-catalogia-calm-continuación`
+- Fase 1 base tecnica
+- Fase 2 MVP usable para catalogador
 
 A la fecha, la Fase 1 se considera cumplida como base de plataforma, y en Fase 2 se completaron iteraciones 1 a 4 mas una mini-iteracion adicional.
 
 ## 2. Estado por fase
-## Fase 1 - Base tecnica (prompt-catalogia-achm)
+## Fase 1 - Base tecnica
 - Estado: completada
-- Alcance ejecutado (11 prompts):
+- Alcance ejecutado (11 items):
   - bootstrap del proyecto y estructura base
   - base de datos y migraciones
   - storage local
@@ -30,7 +30,7 @@ A la fecha, la Fase 1 se considera cumplida como base de plataforma, y en Fase 2
   - endpoints base, seguridad por token, trazabilidad inicial y pipeline operando
   - documentacion tecnica inicial y automatizacion CI
 
-## Fase 2 - MVP usable (prompt-catalogia-calm-continuación)
+## Fase 2 - MVP usable
 - Estado: en ejecucion (avance alto)
 - Completado a la fecha:
 

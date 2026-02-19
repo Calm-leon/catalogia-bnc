@@ -162,3 +162,189 @@ def test_unknown_provider(monkeypatch):
     monkeypatch.setenv("AI_ENGINE_PROVIDER", "foo")
     with pytest.raises(RuntimeError, match="Unsupported"):
         get_ai_engine()
+
+
+def test_local_uses_ollama_generate(monkeypatch):
+    captured_json = {"value": None}
+
+    class _Response:
+        status_code = 200
+
+        def json(self):
+            return {
+                "response": (
+                    '<?xml version="1.0" encoding="utf-8"?>\n'
+                    "<rdf:RDF><rdf:Description><dc:title>x</dc:title></rdf:Description></rdf:RDF>"
+                )
+            }
+
+    class _Client:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def post(self, _url, headers=None, json=None):
+            captured_json["value"] = json
+            return _Response()
+
+    monkeypatch.setenv("LOCAL_AI_ENGINE_URL", "http://localhost:11434")
+    monkeypatch.setenv("LOCAL_AI_ENGINE_MODEL", "qwen2.5vl:3b")
+    monkeypatch.setattr("app.ai.local_engine.httpx.Client", _Client)
+
+    engine = LocalAIEngine()
+    xml = engine.generate_dublin_core_xml(
+        DublinCoreInput(
+            title="x",
+            creator="y",
+            date_value="2026-02-19",
+            format_value="image/jpeg",
+        ),
+        image_bytes=b"fake-image",
+        image_mime_type="image/jpeg",
+    )
+
+    assert "<rdf:RDF>" in xml
+    assert captured_json["value"]["model"] == "qwen2.5vl:3b"
+    assert captured_json["value"]["stream"] is False
+    assert isinstance(captured_json["value"]["images"], list)
+    assert len(captured_json["value"]["images"]) == 1
+
+
+def test_local_coerces_plain_text_to_rdf(monkeypatch):
+    class _Response:
+        status_code = 200
+
+        def json(self):
+            return {"response": "Se observa un retrato en blanco y negro de una persona en exterior."}
+
+    class _Client:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def post(self, _url, headers=None, json=None):
+            return _Response()
+
+    monkeypatch.setenv("LOCAL_AI_ENGINE_URL", "http://localhost:11434")
+    monkeypatch.setenv("LOCAL_AI_ENGINE_MODEL", "moondream:latest")
+    monkeypatch.setattr("app.ai.local_engine.httpx.Client", _Client)
+
+    engine = LocalAIEngine()
+    xml = engine.generate_dublin_core_xml(
+        DublinCoreInput(
+            title="imagen.jpg",
+            creator="Catalogador",
+            date_value="2026-02-19",
+            format_value="image/jpeg",
+        ),
+        image_bytes=b"fake-image",
+        image_mime_type="image/jpeg",
+    )
+
+    assert "<rdf:RDF" in xml
+    assert "<dc:title>imagen.jpg</dc:title>" in xml
+    assert "<dc:description>Se observa un retrato en blanco y negro de una persona en exterior.</dc:description>" in xml
+
+
+def test_local_coerces_json_to_rdf(monkeypatch):
+    class _Response:
+        status_code = 200
+
+        def json(self):
+            return {
+                "response": (
+                    '{"title":"Leon macho rugiendo en paisaje montanoso",'
+                    '"type":"Image",'
+                    '"descriptions":["Fotografia de un leon macho recostado en entorno natural.",'
+                    '"Al fondo se observa una montana con nieve en la cumbre."],'
+                    '"subjects":["Leones","Fauna silvestre","Paisajes"]}'
+                )
+            }
+
+    class _Client:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def post(self, _url, headers=None, json=None):
+            return _Response()
+
+    monkeypatch.setenv("LOCAL_AI_ENGINE_URL", "http://localhost:11434")
+    monkeypatch.setenv("LOCAL_AI_ENGINE_MODEL", "moondream:latest")
+    monkeypatch.setattr("app.ai.local_engine.httpx.Client", _Client)
+
+    engine = LocalAIEngine()
+    xml = engine.generate_dublin_core_xml(
+        DublinCoreInput(
+            title="imagen.jpg",
+            creator="Catalogador",
+            date_value="2026-02-19",
+            format_value="image/jpeg",
+        ),
+        image_bytes=b"fake-image",
+        image_mime_type="image/jpeg",
+    )
+
+    assert "<dc:title>Leon macho rugiendo en paisaje montanoso</dc:title>" in xml
+    assert "<dc:type>Image</dc:type>" in xml
+    assert "<dc:description>Fotografia de un leon macho recostado en entorno natural.</dc:description>" in xml
+    assert "<dc:subject>Leones</dc:subject>" in xml
+
+
+def test_local_rejects_placeholder_json_values(monkeypatch):
+    class _Response:
+        status_code = 200
+
+        def json(self):
+            return {
+                "response": (
+                    '{"title":"imagen1.jpg","type":"text","descriptions":["..."],"subjects":["..."]}'
+                )
+            }
+
+    class _Client:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def post(self, _url, headers=None, json=None):
+            return _Response()
+
+    monkeypatch.setenv("LOCAL_AI_ENGINE_URL", "http://localhost:11434")
+    monkeypatch.setenv("LOCAL_AI_ENGINE_MODEL", "moondream:latest")
+    monkeypatch.setattr("app.ai.local_engine.httpx.Client", _Client)
+
+    engine = LocalAIEngine()
+    xml = engine.generate_dublin_core_xml(
+        DublinCoreInput(
+            title="imagen1.jpg",
+            creator="Desconocido",
+            date_value="2026-02-19",
+            format_value="image/jpeg",
+        ),
+        image_bytes=b"fake-image",
+        image_mime_type="image/jpeg",
+    )
+
+    assert "<dc:type>Image</dc:type>" in xml
+    assert "<dc:description>...</dc:description>" not in xml

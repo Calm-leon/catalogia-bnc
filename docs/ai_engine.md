@@ -33,6 +33,7 @@ Seleccion por variable de entorno `AI_ENGINE_PROVIDER`.
 
 ### Local provider
 - `LOCAL_AI_ENGINE_URL`
+- `LOCAL_AI_ENGINE_MODEL` (default: `qwen2.5vl:3b`)
 
 ## Puntos de reemplazo
 1. Crear un nuevo adaptador en `app/ai/` que implemente `AIEngine`.
@@ -48,6 +49,7 @@ Seleccion por variable de entorno `AI_ENGINE_PROVIDER`.
 ## Soporte visual (vision)
 - El pipeline de imagen envia bytes reales de la imagen al proveedor cuando estan disponibles.
 - OpenAI y Azure pueden usar contenido multimodal (`text + image_url data:`).
+- Local usa Ollama nativo (`POST /api/generate`) y envia `images` en base64 cuando hay imagen.
 - Si no hay imagen disponible, el proveedor opera con metadatos basicos.
 
 ## Prueba de intercambio
