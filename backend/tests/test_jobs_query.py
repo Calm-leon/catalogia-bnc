@@ -73,7 +73,7 @@ def test_job_detail_includes_logs_files_and_quality(monkeypatch):
                 "id": 1,
                 "level": "info",
                 "message": "pipeline_image_completed",
-                "metadata": {"stage": "pipeline"},
+                "metadata": '{"stage":"pipeline"}',
                 "user_id": None,
                 "created_at": now,
             }
@@ -120,5 +120,6 @@ def test_job_detail_includes_logs_files_and_quality(monkeypatch):
     assert payload["job"]["quality"]["score"] == 75
     assert len(payload["logs"]) == 1
     assert payload["logs"][0]["message"] == "pipeline_image_completed"
+    assert payload["logs"][0]["metadata"]["stage"] == "pipeline"
     assert len(payload["files"]) == 1
     assert payload["files"][0]["storage_type"] == "images"

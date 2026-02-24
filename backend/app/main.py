@@ -1,5 +1,6 @@
 import logging
 import os
+import json
 from pathlib import Path
 from typing import Optional
 
@@ -244,6 +245,18 @@ def _serialize_job(row, quality=None) -> JobListItem:
     )
 
 
+def _normalize_metadata(metadata) -> dict:
+    if isinstance(metadata, dict):
+        return metadata
+    if isinstance(metadata, str):
+        try:
+            parsed = json.loads(metadata)
+            return parsed if isinstance(parsed, dict) else {}
+        except json.JSONDecodeError:
+            return {}
+    return {}
+
+
 @app.get(
     "/internal/jobs",
     response_model=JobListResponse,
@@ -314,7 +327,7 @@ async def job_detail(job_id: int, include_quality: bool = True) -> JobDetailResp
                 id=item["id"],
                 level=item["level"],
                 message=item["message"],
-                metadata=item["metadata"] or {},
+                metadata=_normalize_metadata(item["metadata"]),
                 user_id=item["user_id"],
                 created_at=item["created_at"].isoformat(),
             )
