@@ -1,5 +1,6 @@
 import logging
 import os
+import json
 from pathlib import Path
 from typing import Optional
 
@@ -14,6 +15,11 @@ from app.observability import configure_logging
 from app.pipeline.image import run_image_pipeline
 from app.schemas import (
     JobStatus,
+    JobDetailResponse,
+    JobFileItem,
+    JobListItem,
+    JobListResponse,
+    JobLogItem,
     LogCreate,
     LogResponse,
     PipelineImageResponse,
@@ -22,6 +28,7 @@ from app.schemas import (
     XmlRevisionResponse,
 )
 from app.security import Role
+from app.xml_quality import evaluate_xml_quality_from_relative_path
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -224,6 +231,127 @@ async def pipeline_image(
 @app.get("/internal/metrics", dependencies=[require_role(Role.ADMIN, Role.CATALOGER)])
 async def get_metrics() -> JSONResponse:
     return JSONResponse(content=metrics.export_metrics())
+
+
+def _serialize_job(row, quality=None) -> JobListItem:
+    return JobListItem(
+        id=row["id"],
+        status=row["status"],
+        source_filename=row["source_filename"],
+        user_id=row["user_id"],
+        created_at=row["created_at"].isoformat(),
+        updated_at=row["updated_at"].isoformat(),
+        quality=quality,
+    )
+
+
+def _normalize_metadata(metadata) -> dict:
+    if isinstance(metadata, dict):
+        return metadata
+    if isinstance(metadata, str):
+        try:
+            parsed = json.loads(metadata)
+            return parsed if isinstance(parsed, dict) else {}
+        except json.JSONDecodeError:
+            return {}
+    return {}
+
+
+@app.get(
+    "/internal/jobs",
+    response_model=JobListResponse,
+    dependencies=[require_role(Role.ADMIN, Role.CATALOGER, Role.VIEWER)],
+)
+async def list_jobs(
+    limit: int = 50,
+    offset: int = 0,
+    status: Optional[JobStatus] = None,
+    include_quality: bool = True,
+) -> JobListResponse:
+    safe_limit = max(1, min(limit, 200))
+    safe_offset = max(0, offset)
+    status_value = status.value if status else None
+    try:
+        total = await db.count_jobs(status=status_value)
+        rows = await db.list_jobs(
+            limit=safe_limit,
+            offset=safe_offset,
+            status=status_value,
+        )
+
+        jobs: list[JobListItem] = []
+        for row in rows:
+            quality = None
+            if include_quality:
+                latest_xml = await db.get_latest_xml_file_for_job(row["id"])
+                if latest_xml:
+                    quality = evaluate_xml_quality_from_relative_path(
+                        latest_xml["relative_path"]
+                    )
+            jobs.append(_serialize_job(row, quality=quality))
+
+        return JobListResponse(
+            limit=safe_limit,
+            offset=safe_offset,
+            total=total,
+            jobs=jobs,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.get(
+    "/internal/jobs/{job_id}",
+    response_model=JobDetailResponse,
+    dependencies=[require_role(Role.ADMIN, Role.CATALOGER, Role.VIEWER)],
+)
+async def job_detail(job_id: int, include_quality: bool = True) -> JobDetailResponse:
+    try:
+        row = await db.get_job(job_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+
+        quality = None
+        if include_quality:
+            latest_xml = await db.get_latest_xml_file_for_job(job_id)
+            if latest_xml:
+                quality = evaluate_xml_quality_from_relative_path(
+                    latest_xml["relative_path"]
+                )
+        job = _serialize_job(row, quality=quality)
+
+        logs_rows = await db.list_job_logs(job_id)
+        file_rows = await db.list_job_files(job_id)
+        logs = [
+            JobLogItem(
+                id=item["id"],
+                level=item["level"],
+                message=item["message"],
+                metadata=_normalize_metadata(item["metadata"]),
+                user_id=item["user_id"],
+                created_at=item["created_at"].isoformat(),
+            )
+            for item in logs_rows
+        ]
+        files = [
+            JobFileItem(
+                id=item["id"],
+                storage_type=item["storage_type"],
+                original_name=item["original_name"],
+                stored_name=item["stored_name"],
+                relative_path=item["relative_path"],
+                content_type=item["content_type"],
+                size_bytes=item["size_bytes"],
+                user_id=item["user_id"],
+                created_at=item["created_at"].isoformat(),
+            )
+            for item in file_rows
+        ]
+        return JobDetailResponse(job=job, logs=logs, files=files)
+    except HTTPException:
+        raise
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 def _reviewed_relative_path(xml_relative_path: str) -> str:

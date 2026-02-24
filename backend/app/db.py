@@ -1,6 +1,6 @@
 import json
 import os
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import asyncpg
 
@@ -214,4 +214,106 @@ async def upsert_file_for_job(
             content_type,
             size_bytes,
             user_id,
+        )
+
+
+async def count_jobs(status: Optional[str] = None) -> int:
+    if _pool is None:
+        raise RuntimeError("Database pool is not initialized")
+    async with _pool.acquire() as connection:
+        if status:
+            return await connection.fetchval(
+                "SELECT COUNT(*) FROM jobs WHERE status = $1",
+                status,
+            )
+        return await connection.fetchval("SELECT COUNT(*) FROM jobs")
+
+
+async def list_jobs(limit: int, offset: int, status: Optional[str] = None) -> List[asyncpg.Record]:
+    if _pool is None:
+        raise RuntimeError("Database pool is not initialized")
+    async with _pool.acquire() as connection:
+        if status:
+            return await connection.fetch(
+                """
+                SELECT id, status, source_filename, user_id, created_at, updated_at
+                FROM jobs
+                WHERE status = $1
+                ORDER BY created_at DESC, id DESC
+                LIMIT $2 OFFSET $3
+                """,
+                status,
+                limit,
+                offset,
+            )
+        return await connection.fetch(
+            """
+            SELECT id, status, source_filename, user_id, created_at, updated_at
+            FROM jobs
+            ORDER BY created_at DESC, id DESC
+            LIMIT $1 OFFSET $2
+            """,
+            limit,
+            offset,
+        )
+
+
+async def get_job(job_id: int) -> Optional[asyncpg.Record]:
+    if _pool is None:
+        raise RuntimeError("Database pool is not initialized")
+    async with _pool.acquire() as connection:
+        return await connection.fetchrow(
+            """
+            SELECT id, status, source_filename, user_id, created_at, updated_at
+            FROM jobs
+            WHERE id = $1
+            """,
+            job_id,
+        )
+
+
+async def list_job_logs(job_id: int) -> List[asyncpg.Record]:
+    if _pool is None:
+        raise RuntimeError("Database pool is not initialized")
+    async with _pool.acquire() as connection:
+        return await connection.fetch(
+            """
+            SELECT id, level, message, metadata, user_id, created_at
+            FROM logs
+            WHERE job_id = $1
+            ORDER BY created_at ASC, id ASC
+            """,
+            job_id,
+        )
+
+
+async def list_job_files(job_id: int) -> List[asyncpg.Record]:
+    if _pool is None:
+        raise RuntimeError("Database pool is not initialized")
+    async with _pool.acquire() as connection:
+        return await connection.fetch(
+            """
+            SELECT id, storage_type, original_name, stored_name, relative_path, content_type, size_bytes, user_id, created_at
+            FROM files
+            WHERE job_id = $1
+            ORDER BY created_at ASC, id ASC
+            """,
+            job_id,
+        )
+
+
+async def get_latest_xml_file_for_job(job_id: int) -> Optional[asyncpg.Record]:
+    if _pool is None:
+        raise RuntimeError("Database pool is not initialized")
+    async with _pool.acquire() as connection:
+        return await connection.fetchrow(
+            """
+            SELECT id, relative_path, created_at
+            FROM files
+            WHERE job_id = $1
+              AND storage_type = 'xml'
+            ORDER BY created_at DESC, id DESC
+            LIMIT 1
+            """,
+            job_id,
         )
