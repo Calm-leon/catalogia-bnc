@@ -1,5 +1,5 @@
 from enum import StrEnum
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -58,3 +58,59 @@ class XmlRevisionResponse(BaseModel):
     xml_relative_path: str
     xml_content: str
     status: str = "saved"
+
+
+class XmlQualityCheck(BaseModel):
+    key: str
+    passed: bool
+    detail: str
+
+
+class XmlQualitySummary(BaseModel):
+    passed: bool
+    score: float
+    checks: List[XmlQualityCheck]
+
+
+class JobListItem(BaseModel):
+    id: int
+    status: str
+    source_filename: Optional[str] = None
+    user_id: Optional[int] = None
+    created_at: str
+    updated_at: str
+    quality: Optional[XmlQualitySummary] = None
+
+
+class JobListResponse(BaseModel):
+    limit: int
+    offset: int
+    total: int
+    jobs: List[JobListItem]
+
+
+class JobLogItem(BaseModel):
+    id: int
+    level: str
+    message: str
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+    user_id: Optional[int] = None
+    created_at: str
+
+
+class JobFileItem(BaseModel):
+    id: int
+    storage_type: str
+    original_name: str
+    stored_name: str
+    relative_path: str
+    content_type: Optional[str] = None
+    size_bytes: int
+    user_id: Optional[int] = None
+    created_at: str
+
+
+class JobDetailResponse(BaseModel):
+    job: JobListItem
+    logs: List[JobLogItem]
+    files: List[JobFileItem]
