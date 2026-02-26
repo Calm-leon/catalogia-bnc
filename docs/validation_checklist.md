@@ -1,35 +1,40 @@
-# Checklist de validacion continua
+# Checklist Final MVP Usable
 
-## Antes de cada ejecucion
-- [ ] Verificar servicios activos
-  - `docker compose ps`
-- [ ] Ejecutar tests existentes
-  - Backend: `cd backend` y `pytest`
-  - Frontend: (pendiente de definir)
-- [ ] Confirmar compatibilidad
-  - No romper endpoints existentes
-  - No cambiar contratos sin documentar
+## Criterios de aceptacion obligatorios
+- [ ] `GET /health` responde `200` con `{"status":"ok","db":"ok"}`.
+- [ ] Autenticacion valida token y roles:
+  - [ ] 401 sin token en endpoints protegidos.
+  - [ ] 403 para rol no permitido en pipeline.
+- [ ] Flujo catalogador completo funcional:
+  - [ ] autenticar (`/login`)
+  - [ ] subir imagen (`/upload`)
+  - [ ] generar XML (`POST /internal/pipeline/image`)
+  - [ ] editar/guardar (`POST /internal/pipeline/image/review`)
+  - [ ] consultar historial y detalle (`/select`, `/internal/jobs`, `/internal/jobs/{job_id}`)
+- [ ] Trazabilidad por `job_id` visible en jobs/logs/files.
+- [ ] Calidad XML evaluada con checklist deterministico (score + checks).
 
-## Despues de cada ejecucion
-- [ ] Revisar logs
-  - `docker compose logs --tail 100 backend`
-  - `docker compose logs --tail 100 frontend`
-- [ ] Validar endpoints
-  - `GET http://localhost:8000/health`
-  - `POST http://localhost:8000/internal/logs`
-  - `POST http://localhost:8000/internal/storage/upload`
-  - `POST http://localhost:8000/internal/pipeline/image`
-- [ ] Confirmar frontend funcional
-  - `http://localhost:3000/`
-  - `http://localhost:3000/login`
-  - `http://localhost:3000/select`
-  - `http://localhost:3000/upload`
-  - `http://localhost:3000/xml`
+## Evidencia tecnica minima
+- [ ] Backend tests en verde (`pytest`).
+- [ ] Frontend lint/build en verde.
+- [ ] Smoke frontend (upload/xml/select) en verde.
+- [ ] Logs backend sin errores no controlados durante demo.
 
-## Reglas
-- Si algo falla, NO continuar.
-- Corregir antes de avanzar.
+## Script de demo tecnica (10-12 min)
+1. `docker compose up -d --build`
+2. Validar `http://localhost:8000/health`.
+3. Abrir `http://localhost:3000/login` y autenticar catalogador.
+4. En `/upload`, cargar imagen y generar XML.
+5. En `/xml`, editar campos y guardar revision.
+6. En `/select`, abrir detalle del job y mostrar:
+   - score/checklist de calidad,
+   - archivos asociados,
+   - logs asociados.
+7. Mostrar query DB de verificacion (opcional):
+   - jobs recientes,
+   - files por job,
+   - logs por job.
 
-## Notas
-- Tests backend basicos disponibles en `backend/tests`.
-- Reemplazar los tests pendientes cuando se definan suites completas.
+## Cierre
+- [ ] Documentacion actualizada (`README`, `docs/security_access.md`, `docs/validation_checklist.md`).
+- [ ] CI con smoke MVP habilitado y verde.
