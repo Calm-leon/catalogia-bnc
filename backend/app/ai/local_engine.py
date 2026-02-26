@@ -101,7 +101,7 @@ class LocalAIEngine:
 
     def _coerce_content_to_rdf(self, payload: DublinCoreInput, content: str) -> str:
         title = payload.title
-        type_values: list[str] = []
+        type_values: list[str] = ["Image"]
         description_values: list[str] = []
         subject_values: list[str] = []
 
@@ -121,12 +121,24 @@ class LocalAIEngine:
             description_values = maybe_descriptions
             subject_values = maybe_subjects
         else:
+            # If the model leaks prompt/instructions, do not store that noise as metadata.
+            if self._looks_like_prompt_leakage(content):
+                content = ""
             plain = self._sanitize_plain_text(content)
             if plain:
                 description_values = [plain]
 
+        description_values = [
+            value for value in description_values if not self._looks_like_prompt_leakage(value)
+        ]
+        subject_values = [
+            value for value in subject_values if not self._looks_like_prompt_leakage(value)
+        ]
+
         if not description_values:
             description_values = ["Pendiente de revision"]
+        if not type_values:
+            type_values = ["Image"]
 
         return build_dublin_core_rdf_xml(
             title=title,
@@ -171,6 +183,8 @@ class LocalAIEngine:
             return ""
         if self._is_placeholder_text(text):
             return ""
+        if self._looks_like_prompt_leakage(text):
+            return ""
         return text
 
     def _safe_list(self, value: object) -> list[str]:
@@ -190,6 +204,8 @@ class LocalAIEngine:
             return ""
         if self._is_placeholder_text(text):
             return ""
+        if self._looks_like_prompt_leakage(text):
+            return ""
         return text
 
     def _is_placeholder_text(self, text: str) -> bool:
@@ -206,3 +222,22 @@ class LocalAIEngine:
             "pendiente de revision",
             "pendiente de revisión",
         }
+
+    def _looks_like_prompt_leakage(self, text: str) -> bool:
+        t = text.strip().lower()
+        suspicious_tokens = (
+            '"type":',
+            '"descriptions":',
+            '"subjects":',
+            '{"type":',
+            '[{"type":',
+            '[ { "type":',
+            "reglas:",
+            "contexto:",
+            "devuelve objeto json",
+            "json valido",
+            "sin markdown",
+            "campos permitidos",
+            "para una fotografia usa exactamente image",
+        )
+        return any(token in t for token in suspicious_tokens)
