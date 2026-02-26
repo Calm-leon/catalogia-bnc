@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -13,6 +13,7 @@ from app.auth import require_role
 from app.dublin_core_xml import build_dublin_core_rdf_xml
 from app.observability import configure_logging
 from app.pipeline.image import run_image_pipeline
+from app.rate_limit import check_rate_limit, rate_limit_enabled
 from app.schemas import (
     JobStatus,
     JobDetailResponse,
@@ -50,6 +51,49 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    if os.getenv("SECURITY_HEADERS_ENABLED", "true").strip().lower() not in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
+        return response
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    csp = os.getenv("SECURITY_CSP", "default-src 'none'; frame-ancestors 'none'; base-uri 'none'")
+    response.headers["Content-Security-Policy"] = csp
+    if os.getenv("SECURITY_HSTS_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}:
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
+
+
+def _rate_limit_client_key(request: Request, authorization: str) -> str:
+    if authorization.startswith("Bearer "):
+        return f"token:{authorization.removeprefix('Bearer ').strip()}"
+    if request.client and request.client.host:
+        return f"ip:{request.client.host}"
+    return "ip:unknown"
+
+
+def _enforce_rate_limit(request: Request, endpoint_key: str) -> None:
+    if not rate_limit_enabled():
+        return
+    authorization = request.headers.get("Authorization", "")
+    client_key = _rate_limit_client_key(request, authorization)
+    decision = check_rate_limit(client_key=client_key, endpoint_key=endpoint_key)
+    if decision.allowed:
+        return
+    raise HTTPException(
+        status_code=429,
+        detail=f"Rate limit exceeded for {endpoint_key}. Retry in {decision.retry_after_seconds}s",
+    )
+
+
 @app.on_event("startup")
 async def on_startup() -> None:
     await db.init_pool()
@@ -70,7 +114,8 @@ async def health() -> JSONResponse:
 
 
 @app.post("/internal/logs", response_model=LogResponse, dependencies=[require_role(Role.ADMIN, Role.CATALOGER)])
-async def create_log(payload: LogCreate) -> LogResponse:
+async def create_log(payload: LogCreate, request: Request) -> LogResponse:
+    _enforce_rate_limit(request, "logs")
     try:
         log_id = await db.insert_log(
             level=payload.level,
@@ -113,12 +158,14 @@ async def upload_storage_file(
 
 @app.post("/internal/pipeline/image", response_model=PipelineImageResponse, dependencies=[require_role(Role.ADMIN, Role.CATALOGER)])
 async def pipeline_image(
+    request: Request,
     file: UploadFile = File(...),
     storage_type: str = Form("images"),
     creator: Optional[str] = Form(None),
     job_id: Optional[int] = Form(None),
     user_id: Optional[int] = Form(None),
 ) -> PipelineImageResponse:
+    _enforce_rate_limit(request, "pipeline_image")
     effective_job_id = job_id
     if effective_job_id is None:
         try:
